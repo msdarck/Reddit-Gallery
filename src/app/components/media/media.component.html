@@ -7,8 +7,23 @@
     content.preview.images.length &&
     content.post_hint === redditPostHint.IMAGE
     ) {
-    <img class="max-h-96 w-full rounded-lg object-contain" data-testid="media-image" [alt]="content.title"
-      [src]="imageSrc" (error)="onImageError()" />
+    <div
+      class="w-full overflow-hidden rounded-lg bg-slate-950"
+      [style.aspect-ratio]="imageAspectRatio"
+      data-testid="media-image-container"
+    >
+      <img
+        class="h-full w-full rounded-lg object-contain"
+        data-testid="media-image"
+        [alt]="content.title"
+        [src]="imageSrc"
+        [attr.width]="imageWidth"
+        [attr.height]="imageHeight"
+        loading="lazy"
+        decoding="async"
+        (error)="onImageError()"
+      />
+    </div>
     }
     <!-- Reddit video content -->
     @if (
@@ -16,7 +31,7 @@
     content.preview.reddit_video_preview &&
     content.post_hint === redditPostHint.LINK
     ) {
-    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950">
+    <div class="w-full overflow-hidden rounded-lg bg-slate-950" [style.aspect-ratio]="videoAspectRatio">
       <video data-testid="media-video" class="h-full w-full rounded-lg object-contain" autoplay loop muted playsinline>
         <source [src]="content.preview.reddit_video_preview.fallback_url" />
       </video>
@@ -29,7 +44,8 @@
     content.secure_media_embed &&
     computedVideoPlatform !== videoPlatform.OTHER
     ) {
-    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950" data-testid="video-embed-container">
+    <div class="w-full overflow-hidden rounded-lg bg-slate-950" [style.aspect-ratio]="videoAspectRatio"
+      data-testid="video-embed-container">
       <iframe class="h-full w-full rounded-lg border-0" data-testid="video-iframe"
         [src]="computedVideoEmbedUrl ?? '' | trustResource" title="{{ content.title }}" allow="
               accelerometer;
@@ -49,7 +65,7 @@
     content.secure_media_embed &&
     computedVideoPlatform === videoPlatform.OTHER
     ) {
-    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950">
+    <div class="w-full overflow-hidden rounded-lg bg-slate-950" [style.aspect-ratio]="videoAspectRatio">
       <iframe class="h-full w-full rounded-lg border-0" data-testid="media-iframe"
         [src]="content.secure_media_embed.media_domain_url | trustResource"></iframe>
     </div>

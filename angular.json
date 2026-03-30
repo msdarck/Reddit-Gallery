@@ -54,14 +54,21 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
-              "namedChunks": true
+              "namedChunks": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.development.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "options": {
-            "buildTarget": "reddit-gallery:build"
+            "buildTarget": "reddit-gallery:build",
+            "proxyConfig": "proxy.conf.json"
           },
           "builder": "@angular/build:dev-server",
           "configurations": {

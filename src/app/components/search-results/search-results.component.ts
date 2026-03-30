@@ -7,7 +7,9 @@ import {
   ElementRef,
   OnDestroy,
   OnInit,
+  QueryList,
   ViewChild,
+  ViewChildren,
   inject
 } from '@angular/core'
 import { Observable, Subscription } from 'rxjs'
@@ -27,6 +29,18 @@ import { SubFilterComponent } from '../sub-filter/sub-filter.component'
   templateUrl: './search-results.component.html'
 })
 export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy {
+  /**
+   * Prefetch distance below the viewport to trigger loading before users
+   * hit the visual end of the current content.
+   */
+  private static readonly PREFETCH_ROOT_MARGIN_PX = 2200
+
+  /**
+   * Multiplier for viewport-based prefetching so long cards still trigger
+   * next-page loading far in advance.
+   */
+  private static readonly PREFETCH_VIEWPORT_MULTIPLIER = 2
+
   /**
    * Injected Reddit service for managing page types and subreddit names.
    */
@@ -49,6 +63,12 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private scrollSentinel?: ElementRef<HTMLDivElement>
 
   /**
+   * Rendered masonry columns used to read current rendered heights.
+   */
+  @ViewChildren('masonryColumn')
+  private masonryColumns?: QueryList<ElementRef<HTMLDivElement>>
+
+  /**
    * Observable used to inform loading state (still async-piped in template).
    */
   protected readonly loading$: Observable<boolean>
@@ -56,6 +76,7 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private querySubscription?: Subscription
   private pageTypeSubscription?: Subscription
   private itemsPerRowSubscription?: Subscription
+  private loadingSubscription?: Subscription
   private sentinelObserver?: IntersectionObserver
 
   /**
@@ -64,16 +85,22 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private nextPage?: string
 
   /**
+   * Prevents repeated observer callbacks from requesting the same page while
+   * a next-page fetch is already in progress.
+   */
+  private isRequestingNextPage = false
+
+  /**
    * Latest results kept so rows can be recomputed when itemsPerRow changes
    * without waiting for a new query emission.
    */
   private latestResults: IRedditResult[] = []
 
   /**
-   * Pre-computed rows — updated only when results or itemsPerRow change,
-   * preventing re-computation on every change-detection cycle.
+   * Pre-computed, height-balanced columns. Items are distributed in source
+   * order to the currently shortest column to avoid large vertical gaps.
    */
-  public resultRows: IRedditResult[][] = []
+  public resultColumns: IRedditResult[][] = []
 
   /**
    * Pre-computed CSS grid-template-columns string — updated only when
@@ -85,6 +112,11 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
    * Becomes true after the first query emission so the results section is shown.
    */
   public hasQuery = false
+
+  /**
+   * Tracks whether there are any results to render.
+   */
+  public hasResults = false
 
   /**
    * The active Reddit page type, subscribed to once here and passed into each
@@ -123,8 +155,19 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
     this.querySubscription = this.redditService.getQuery().subscribe(query => {
       this.hasQuery = true
       this.nextPage = query?.nextPage
-      this.latestResults = query?.results ?? []
-      this.resultRows = this.computeRows(this.latestResults)
+      this.isRequestingNextPage = false
+      const incomingResults = query?.results ?? []
+
+      if (this.isAppendedResultSet(incomingResults)) {
+        const newResults = incomingResults.slice(this.latestResults.length)
+        this.appendResultsToBalancedColumns(newResults)
+        this.latestResults = incomingResults
+      } else {
+        this.latestResults = incomingResults
+        this.resultColumns = this.computeColumns(this.latestResults)
+      }
+
+      this.hasResults = this.latestResults.length > 0
       this.cdr.markForCheck()
     })
 
@@ -141,9 +184,18 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
       .subscribe(items => {
         this.itemsPerRow = items
         this.gridTemplateColumns = `repeat(${this.itemsPerRow}, minmax(0, 1fr))`
-        this.resultRows = this.computeRows(this.latestResults)
+        this.resultColumns = this.computeColumns(this.latestResults)
+        this.hasResults = this.latestResults.length > 0
         this.cdr.markForCheck()
       })
+
+    // Release the next-page request guard once loading ends so retries can occur
+    // if a request fails before emitting new query results.
+    this.loadingSubscription = this.loading$.subscribe(isLoading => {
+      if (!isLoading) {
+        this.isRequestingNextPage = false
+      }
+    })
   }
 
   /**
@@ -163,6 +215,7 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
     this.querySubscription?.unsubscribe()
     this.pageTypeSubscription?.unsubscribe()
     this.itemsPerRowSubscription?.unsubscribe()
+    this.loadingSubscription?.unsubscribe()
   }
 
   /**
@@ -172,14 +225,24 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private attachSentinelObserver(): void {
     if (!this.scrollSentinel) return
 
+    const viewportHeight = globalThis.window?.innerHeight ?? 0
+    const prefetchMargin = Math.max(
+      SearchResultsComponent.PREFETCH_ROOT_MARGIN_PX,
+      viewportHeight * SearchResultsComponent.PREFETCH_VIEWPORT_MULTIPLIER
+    )
+
     this.sentinelObserver = new IntersectionObserver(
       entries => {
         const entry = entries[0]
-        if (entry.isIntersecting && this.nextPage) {
+        if (entry.isIntersecting && this.nextPage && !this.isRequestingNextPage) {
+          this.isRequestingNextPage = true
           this.redditService.setSubRedditPage(this.nextPage)
         }
       },
-      { threshold: 0.1 }
+      {
+        threshold: 0,
+        rootMargin: `0px 0px ${prefetchMargin}px 0px`
+      }
     )
 
     this.sentinelObserver.observe(this.scrollSentinel.nativeElement)
@@ -193,14 +256,129 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   /**
-   * Groups the current results into rows of itemsPerRow width.
-   * Called only when results or itemsPerRow change — never from the template.
+   * Distributes items across N columns by always appending the next item
+   * to the currently shortest column. This avoids row-based whitespace while
+   * maintaining source-order insertion.
    */
-  private computeRows(results: IRedditResult[]): IRedditResult[][] {
-    const rows: IRedditResult[][] = []
-    for (let i = 0; i < results.length; i += this.itemsPerRow) {
-      rows.push(results.slice(i, i + this.itemsPerRow))
+  private computeColumns(results: IRedditResult[]): IRedditResult[][] {
+    const columnCount = Math.max(
+      this.minItemsPerRow,
+      Math.min(this.itemsPerRow, this.maxItemsPerRow)
+    )
+
+    if (!results.length) {
+      return Array.from({ length: columnCount }, () => [])
     }
-    return rows
+
+    const columns: IRedditResult[][] = Array.from(
+      { length: columnCount },
+      () => []
+    )
+    const columnHeights = new Array<number>(columnCount).fill(0)
+
+    for (const result of results) {
+      let targetIndex = 0
+
+      for (let i = 1; i < columnHeights.length; i++) {
+        if (columnHeights[i] < columnHeights[targetIndex]) {
+          targetIndex = i
+        }
+      }
+
+      columns[targetIndex].push(result)
+      columnHeights[targetIndex] += this.estimateItemHeight(result)
+    }
+
+    return columns
+  }
+
+  /**
+   * Appends new results to the currently shortest rendered column so
+   * long scrolling sessions remain balanced using real DOM heights.
+   */
+  private appendResultsToBalancedColumns(newResults: IRedditResult[]): void {
+    if (!newResults.length) return
+
+    const columnCount = Math.max(
+      this.minItemsPerRow,
+      Math.min(this.itemsPerRow, this.maxItemsPerRow)
+    )
+
+    if (!this.resultColumns.length || this.resultColumns.length !== columnCount) {
+      this.resultColumns = this.computeColumns(this.latestResults.concat(newResults))
+      return
+    }
+
+    const columnHeights = this.getRenderedColumnHeights(columnCount)
+
+    for (const result of newResults) {
+      let targetIndex = 0
+
+      for (let i = 1; i < columnHeights.length; i++) {
+        if (columnHeights[i] < columnHeights[targetIndex]) {
+          targetIndex = i
+        }
+      }
+
+      this.resultColumns[targetIndex].push(result)
+      columnHeights[targetIndex] += this.estimateItemHeight(result)
+    }
+  }
+
+  /**
+   * Uses current DOM heights when available, falling back to estimated
+   * heights from existing column content.
+   */
+  private getRenderedColumnHeights(columnCount: number): number[] {
+    const rendered = this.masonryColumns?.toArray() ?? []
+
+    if (rendered.length === columnCount) {
+      return rendered.map(column => column.nativeElement.offsetHeight)
+    }
+
+    return this.resultColumns.map(column =>
+      column.reduce((height, result) => height + this.estimateItemHeight(result), 0)
+    )
+  }
+
+  /**
+   * Determines whether incoming results are an append-only continuation
+   * of the current list.
+   */
+  private isAppendedResultSet(incomingResults: IRedditResult[]): boolean {
+    if (!this.latestResults.length) return false
+    if (incomingResults.length <= this.latestResults.length) return false
+
+    for (let i = 0; i < this.latestResults.length; i++) {
+      if (incomingResults[i]?.id !== this.latestResults[i]?.id) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Estimates card height so column distribution remains visually balanced.
+   */
+  private estimateItemHeight(result: IRedditResult): number {
+    const baseCardHeight = 120
+    const image = result.preview?.images?.[0]?.source
+
+    if (image?.width && image?.height) {
+      const estimatedCardWidth = 320
+      const mediaHeight = Math.min(384, (image.height / image.width) * estimatedCardWidth)
+      return baseCardHeight + mediaHeight
+    }
+
+    if (result.is_gallery && result.gallery_data?.items?.length) {
+      return baseCardHeight + 300
+    }
+
+    if (result.preview?.reddit_video_preview || result.secure_media_embed) {
+      return baseCardHeight + 200
+    }
+
+    return baseCardHeight + 220
   }
 }

@@ -2,11 +2,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   Input,
-  OnChanges,
-  SimpleChanges,
   inject
 } from '@angular/core'
-import { CommonModule, DecimalPipe } from '@angular/common'
+import { CommonModule } from '@angular/common'
 import {
   IRedditResult,
   RedditPageType,
@@ -14,7 +12,6 @@ import {
   VideoPlatform
 } from 'src/app/models/reddit.model'
 import { TrustResourcePipe } from 'src/app/pipes/trust-resource/trust-resource.pipe'
-import { RelativeTimePipe } from 'src/app/pipes/relative-time/relative-time.pipe'
 import { RedditService } from 'src/services/reddit/reddit.service'
 import { GalleryComponent } from '../gallery/gallery.component'
 
@@ -27,14 +24,12 @@ import { GalleryComponent } from '../gallery/gallery.component'
   imports: [
     CommonModule,
     TrustResourcePipe,
-    DecimalPipe,
-    RelativeTimePipe,
     GalleryComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media.component.html'
 })
-export class MediaComponent implements OnChanges {
+export class MediaComponent {
   /**
    * Injected Reddit service for managing page types and subreddit names.
    */
@@ -63,8 +58,17 @@ export class MediaComponent implements OnChanges {
    * The content object from Reddit.
    * For more details {@see IRedditResult}.
    */
+  private _content?: IRedditResult
+
   @Input()
-  public content?: IRedditResult
+  public get content(): IRedditResult | undefined {
+    return this._content
+  }
+
+  public set content(value: IRedditResult | undefined) {
+    this._content = value
+    this.syncDerivedMediaState(value)
+  }
 
   /**
    * The active Reddit page type passed in from the parent search-results
@@ -77,6 +81,22 @@ export class MediaComponent implements OnChanges {
    * The image source to display.
    */
   public imageSrc?: string
+
+  /**
+   * Intrinsic dimensions used to reserve layout space before image load.
+   */
+  public imageWidth?: number
+  public imageHeight?: number
+
+  /**
+   * CSS aspect-ratio value used by the image container to reduce CLS.
+   */
+  public imageAspectRatio = '1 / 1'
+
+  /**
+   * CSS aspect-ratio for video containers, computed from media metadata.
+   */
+  public videoAspectRatio = '16 / 9'
 
   /**
    * The inherited content row size. This is used to ensure that
@@ -97,20 +117,42 @@ export class MediaComponent implements OnChanges {
   public computedVideoEmbedUrl?: string | null
 
   /**
-   * Whenever content changes, update the image source and precompute
-   * any video-platform data so the template reads plain properties.
+   * Updates cached image/video state whenever content is set.
    */
-  public ngOnChanges(changes: SimpleChanges) {
-    if (changes && changes['content']) {
-      this.imageSrc = this.content?.url
+  private syncDerivedMediaState(content?: IRedditResult): void {
+    this.imageSrc = content?.url
 
-      if (this.content) {
-        this.computeVideoData(this.content)
-      } else {
-        this.computedVideoPlatform = undefined
-        this.computedVideoEmbedUrl = undefined
-      }
+    if (content) {
+      this.computeImageDimensions(content)
+      this.computeVideoData(content)
+      return
     }
+
+    this.imageWidth = undefined
+    this.imageHeight = undefined
+    this.imageAspectRatio = '1 / 1'
+    this.videoAspectRatio = '16 / 9'
+    this.computedVideoPlatform = undefined
+    this.computedVideoEmbedUrl = undefined
+  }
+
+  /**
+   * Precomputes intrinsic image dimensions from Reddit preview metadata so
+   * the browser can reserve space before the image finishes loading.
+   */
+  private computeImageDimensions(content: IRedditResult): void {
+    const source = content.preview?.images?.[0]?.source
+
+    if (source?.width && source?.height) {
+      this.imageWidth = source.width
+      this.imageHeight = source.height
+      this.imageAspectRatio = `${source.width} / ${source.height}`
+      return
+    }
+
+    this.imageWidth = undefined
+    this.imageHeight = undefined
+    this.imageAspectRatio = '1 / 1'
   }
 
   /**
@@ -118,6 +160,8 @@ export class MediaComponent implements OnChanges {
    * getVideoPlatform() is only called once per content change.
    */
   private computeVideoData(content: IRedditResult): void {
+    this.videoAspectRatio = this.getVideoAspectRatio(content)
+
     const platform = this.getVideoPlatform(content)
     this.computedVideoPlatform = platform
 
@@ -132,6 +176,30 @@ export class MediaComponent implements OnChanges {
         this.computedVideoEmbedUrl =
           content.secure_media_embed?.media_domain_url || null
     }
+  }
+
+  /**
+   * Computes the best available video aspect ratio from content metadata.
+   */
+  private getVideoAspectRatio(content: IRedditResult): string {
+    const redditVideo = content.preview?.reddit_video_preview
+    if (redditVideo?.width && redditVideo?.height) {
+      return `${redditVideo.width} / ${redditVideo.height}`
+    }
+
+    const embedWidth = content.secure_media_embed?.width
+    const embedHeight = content.secure_media_embed?.height
+    if (embedWidth && embedHeight) {
+      return `${embedWidth} / ${embedHeight}`
+    }
+
+    const oembedWidth = content.secure_media?.oembed?.width
+    const oembedHeight = content.secure_media?.oembed?.height
+    if (oembedWidth && oembedHeight) {
+      return `${oembedWidth} / ${oembedHeight}`
+    }
+
+    return '16 / 9'
   }
 
   /**

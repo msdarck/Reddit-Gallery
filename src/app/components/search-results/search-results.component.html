@@ -4,20 +4,18 @@
   @if (hasQuery) {
   <div>
 
-    <ul>
-      @for (row of resultRows; track $index) {
-      <li class="mb-2">
-        <div class="grid gap-2" [style.grid-template-columns]="gridTemplateColumns">
-          @for (result of row; track result.id) {
+    <div class="grid items-start gap-2" [style.grid-template-columns]="gridTemplateColumns" data-testid="search-results-columns">
+      @for (column of resultColumns; track $index) {
+      <div #masonryColumn class="flex h-auto flex-col gap-2 self-start">
+        @for (result of column; track result.id) {
           <app-media [content]="result" [activePageType]="activePageType"></app-media>
-          }
-        </div>
-      </li>
+        }
+      </div>
       }
-    </ul>
+    </div>
     <!-- Sentinel element observed to trigger next-page loading -->
     <div #scrollSentinel class="h-1"></div>
-    @if (!resultRows.length && !(loading$ | async)) {
+    @if (!hasResults && !(loading$ | async)) {
     <div data-testid="search-results-empty" class="mx-auto max-w-2xl text-center">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="mx-auto h-12 w-12 fill-slate-600"
         aria-hidden="true">

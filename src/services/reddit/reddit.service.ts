@@ -14,6 +14,7 @@ import {
   RedditPostHint,
   RedditPageType
 } from 'src/app/models/reddit.model'
+import {environment} from 'src/environments/environment'
 
 /**
  * Service which is used to communicate with the Reddit API.
@@ -24,7 +25,7 @@ import {
 export class RedditService {
   private readonly http = inject(HttpClient)
 
-  private static readonly API_BASE = 'https://old.reddit.com'
+  private static readonly API_BASE = environment.redditApiBase
   private static readonly MAX_CONTENT_FETCH = 24
   private static readonly DEFAULT_SUBREDDIT = 'cats'
   private static readonly DEFAULT_PAGE = 't3_'
@@ -298,30 +299,35 @@ export class RedditService {
     safeMode
   }: IRedditRequestOptions): Observable<IRedditResult[]> {
     const pageType = this._redditPageType$.getValue()
-    const path = new URL(
-      `${RedditService.API_BASE}/${pageType}/${name}${filter !== RedditFilter.ALL ? `/${filter}` : ''}.json?raw_json=1`
-    )
-    path.searchParams.append(
+    const endpointPath = `/${pageType}/${name}${filter !== RedditFilter.ALL ? `/${filter}` : ''}.json`
+    const normalizedBase = RedditService.API_BASE.endsWith('/')
+      ? RedditService.API_BASE.slice(0, -1)
+      : RedditService.API_BASE
+    const params = new URLSearchParams({raw_json: '1'})
+
+    params.append(
       RedditRequestParameters.LIMIT,
       RedditService.MAX_CONTENT_FETCH.toString()
     )
 
     // If page is provided it gets appended to the query to ensure we're not re-fetching the same content.
     if (page) {
-      path.searchParams.append(RedditRequestParameters.AFTER, page)
+      params.append(RedditRequestParameters.AFTER, page)
     }
 
     if (subFilter) {
-      path.searchParams.append(
+      params.append(
         RedditRequestParameters.SORT,
         RedditRequestParameters.TOP
       )
-      path.searchParams.append(RedditRequestParameters.T, subFilter)
+      params.append(RedditRequestParameters.T, subFilter)
     }
 
-    console.info('✅ Making request to:', path.toString())
+    const requestUrl = `${normalizedBase}${endpointPath}?${params.toString()}`
 
-    return this.http.get<IRedditResultNatural>(path.toString()).pipe(
+    console.info('✅ Making request to:', requestUrl)
+
+    return this.http.get<IRedditResultNatural>(requestUrl).pipe(
       map(result =>
         result.data.children
           .map(item => item.data)
