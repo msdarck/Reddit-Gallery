@@ -1,0 +1,117 @@
+@if (activeFilter | async; as filter) {
+  <div>
+    <div class="block">
+      <nav
+        class="isolate flex divide-x divide-gray-200 rounded-lg shadow"
+        aria-label="Tabs"
+      >
+        <button
+          (click)="toggleFilter(redditFilter.HOT)"
+          data-testid="filter-hot"
+          [ngClass]="{
+            'active text-cyan-400': filter === redditFilter.HOT,
+            'text-slate-400 hover:text-slate-200': filter !== redditFilter.HOT
+          }"
+          class="dynamic-text-shadow group relative min-w-0 flex-1 overflow-hidden rounded-tl-lg bg-slate-800 px-1 py-4 text-center text-sm font-bold transition-all hover:bg-slate-700 focus:z-10 sm:px-4 sm:py-4 sm:text-base md:text-lg"
+          aria-current="page"
+        >
+          <span class="text-white">Hot 🔥</span>
+          <span
+            aria-hidden="true"
+            [ngClass]="{
+              'bg-cyan-500': filter === redditFilter.HOT,
+              'bg-transparent': filter !== redditFilter.HOT
+            }"
+            class="absolute inset-x-0 bottom-0 h-2 bg-cyan-500"
+          ></span>
+        </button>
+        <button
+          (click)="toggleFilter(redditFilter.NEW)"
+          data-testid="filter-new"
+          [ngClass]="{
+            'active text-cyan-400': filter === redditFilter.NEW,
+            'text-slate-400 hover:text-slate-200': filter !== redditFilter.NEW
+          }"
+          class="dynamic-text-shadow group relative min-w-0 flex-1 overflow-hidden bg-slate-800 px-1 py-4 text-center text-sm font-bold transition-all hover:bg-slate-700 focus:z-10 sm:px-4 sm:py-4 sm:text-base md:text-lg"
+        >
+          <span class="text-white">New ✨</span>
+          <span
+            [ngClass]="{
+              'bg-cyan-500': filter === redditFilter.NEW,
+              'bg-transparent': filter !== redditFilter.NEW
+            }"
+            aria-hidden="true"
+            class="absolute inset-x-0 bottom-0 h-2"
+          ></span>
+        </button>
+        <button
+          (click)="toggleFilter(redditFilter.TOP)"
+          data-testid="filter-top"
+          [ngClass]="{
+            'active text-cyan-400': filter === redditFilter.TOP,
+            'text-slate-400 hover:text-slate-200': filter !== redditFilter.TOP
+          }"
+          class="dynamic-text-shadow group relative min-w-0 flex-1 overflow-hidden bg-slate-800 px-1 py-4 text-center text-sm font-bold transition-all hover:bg-slate-700 focus:z-10 sm:px-4 sm:py-4 sm:text-base md:text-lg"
+        >
+          <span class="text-white">Top 🥇</span>
+          <span
+            [ngClass]="{
+              'bg-cyan-500': filter === redditFilter.TOP,
+              'bg-transparent': filter !== redditFilter.TOP
+            }"
+            aria-hidden="true"
+            class="absolute inset-x-0 bottom-0 h-2"
+          ></span>
+        </button>
+        <button
+          (click)="toggleFilter(redditFilter.RISING)"
+          data-testid="filter-rising"
+          [ngClass]="{
+            'active text-cyan-400': filter === redditFilter.RISING,
+            'text-slate-400 hover:text-slate-200': filter !== redditFilter.RISING
+          }"
+          class="dynamic-text-shadow group relative min-w-0 flex-1 overflow-hidden bg-slate-800 px-1 py-4 text-center text-sm font-bold transition-all hover:bg-slate-700 focus:z-10 sm:px-4 sm:py-4 sm:text-base md:text-lg"
+        >
+          <span class="text-white">Rising 📈</span>
+          <span
+            [ngClass]="{
+              'bg-cyan-500': filter === redditFilter.RISING,
+              'bg-transparent': filter !== redditFilter.RISING
+            }"
+            aria-hidden="true"
+            class="absolute inset-x-0 bottom-0 h-2 bg-transparent"
+          ></span>
+        </button>
+        <button
+          (click)="toggleFilter(redditFilter.ALL)"
+          data-testid="filter-all"
+          [ngClass]="{
+            'active text-cyan-400': filter === redditFilter.ALL,
+            'text-slate-400 hover:text-slate-200': filter !== redditFilter.ALL
+          }"
+          class="dynamic-text-shadow group relative min-w-0 flex-1 overflow-hidden rounded-tr-lg bg-slate-800 px-1 py-4 text-center text-sm font-bold transition-all hover:bg-slate-700 focus:z-10 sm:px-4 sm:py-4 sm:text-base md:text-lg"
+        >
+          <span class="text-white">All 🚰</span>
+          <span
+            [ngClass]="{
+              'bg-cyan-500': filter === redditFilter.ALL,
+              'bg-transparent': filter !== redditFilter.ALL
+            }"
+            aria-hidden="true"
+            class="absolute inset-x-0 bottom-0 h-2 bg-transparent"
+          ></span>
+        </button>
+      </nav>
+    </div>
+  </div>
+}
+<div class="bg-slate-900">
+  <div
+    [ngClass]="(loading$ | async) ? 'visible' : 'invisible'"
+    class="indeterminate-progress-bar relative h-2 overflow-hidden bg-slate-900"
+  >
+    <div
+      class="indeterminate-progress-bar__progress absolute bottom-0 top-0 w-[50%] rounded-lg bg-cyan-500"
+    ></div>
+  </div>
+</div>

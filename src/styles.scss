@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+iframe,
+img,
+video {
+  border-radius: 8px;
+}
+
+
+.bg-circles {
+  @apply absolute left-0 top-0 h-full w-full overflow-hidden;
+}
+
+.bg-circles div {
+  @apply absolute bottom-[-150px] block h-5 w-5 list-none bg-white/20;
+  animation: animate 25s linear infinite;
+  will-change: transform, opacity;
+}
+
+.bg-circles div:nth-child(1) {
+  animation-delay: 0s;
+  @apply left-[25%] h-20 w-20;
+}
+
+.bg-circles div:nth-child(2) {
+  animation-delay: 2s;
+  animation-duration: 12s;
+  @apply left-[10%] h-5 w-5;
+}
+
+.bg-circles div:nth-child(3) {
+  animation-delay: 4s;
+  @apply left-[70%] h-5 w-5;
+}
+
+.bg-circles div:nth-child(4) {
+  animation-delay: 0s;
+  animation-duration: 18s;
+  @apply left-[40%] h-16 w-16;
+}
+
+.bg-circles div:nth-child(5) {
+  animation-delay: 0s;
+  @apply left-[65%] h-5 w-5;
+}
+
+.bg-circles div:nth-child(6) {
+  animation-delay: 3s;
+  @apply left-[75%] h-28 w-28;
+}
+
+.bg-circles div:nth-child(7) {
+  animation-delay: 7s;
+  @apply left-[35%] h-40 w-40;
+}
+
+.bg-circles div:nth-child(8) {
+  animation-delay: 15s;
+  animation-duration: 45s;
+  @apply left-[50%] h-6 w-6;
+}
+
+.bg-circles div:nth-child(9) {
+  animation-delay: 2s;
+  animation-duration: 35s;
+  @apply left-[20%] h-4 w-4;
+}
+
+.bg-circles div:nth-child(10) {
+  animation-delay: 0s;
+  animation-duration: 11s;
+  @apply left-[85%] h-40 w-40;
+}
+
+.indeterminate-progress-bar {
+  .indeterminate-progress-bar__progress {
+    animation-duration: 2s;
+    animation-iteration-count: infinite;
+    animation-name: indeterminate-progress-bar;
+  }
+}
+
+.cdk-virtual-scroll-content-wrapper {
+  max-width: 100%;
+}
+
+.headline {
+  @apply relative inline-block text-white;
+  font-family: 'Outfit', sans-serif;
+  z-index: 1;
+}
+
+.headline:after {
+  @apply absolute left-[0.06em] top-[0.06em] z-[-1] h-full w-full text-transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shard 60s linear infinite;
+  background-image: linear-gradient(
+    45deg,
+    transparent 45%,
+    rgba(6, 182, 212, 0.4) 45%, /* cyan-500/40 */
+    rgba(6, 182, 212, 0.4) 55%,
+    transparent 0
+  );
+  background-size: 0.05em 0.05em;
+  content: attr(data-shadow);
+}
+
+@keyframes shard {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100% -100%;
+  }
+}
+
+@keyframes animate {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-1000px) rotate(720deg);
+  }
+}
+
+@keyframes indeterminate-progress-bar {
+  from {
+    left: -50%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-circles div {
+    animation: none;
+  }
+
+  .headline:after {
+    animation: none;
+  }
+}

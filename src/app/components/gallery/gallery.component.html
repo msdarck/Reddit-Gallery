@@ -1,0 +1,37 @@
+<div class="relative w-full">
+  <div
+    #scrollContainer
+    class="grid grid-cols-2 gap-4 w-full rounded-lg"
+    data-testid="gallery-container"
+  >
+    @for (item of validItems; track item) {
+      @if (metaData && metaData[item.media_id] && metaData[item.media_id].s) {
+        <div
+          class="overflow-hidden rounded-lg"
+          data-testid="gallery-item"
+        >
+          <img
+            [src]="getImageUrl(item.media_id)"
+            [alt]="metaData[item.media_id].id"
+            class="block h-full w-full rounded-lg bg-slate-950 object-contain"
+            data-testid="gallery-image"
+          />
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<style>
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bg-white-50 {
+    @apply bg-white/50;
+  }
+</style>

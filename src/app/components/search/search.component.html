@@ -1,0 +1,58 @@
+<form
+  data-testid="search-form"
+  [formGroup]="searchForm"
+  (ngSubmit)="onSubmit($event)"
+  class="relative z-10"
+>
+  <div>
+    <label for="term" class="sr-only block text-sm font-medium text-gray-700"
+      >Search</label
+    >
+    @if (redditPageType$ | async; as activePageType) {
+      <div class="mt-1 flex rounded-md shadow-sm">
+        <button
+          (click)="togglePageType()"
+          aria-label="Toggle page type"
+          class="inline-flex items-center rounded-l-md border border-r-0 border-slate-700 bg-slate-800 px-3 text-cyan-500 sm:text-sm"
+          type="button"
+        >
+          {{
+            searchForm.get('pageType')?.value === redditPageType.USER
+              ? 'u'
+              : 'r'
+          }}/
+        </button>
+        <div class="relative">
+          <input
+            type="text"
+            name="term"
+            data-testid="search-term"
+            formControlName="term"
+            id="term"
+            class="block w-full min-w-0 flex-1 rounded-none rounded-r-md bg-slate-800 border-slate-700 px-3 py-2 pr-12 text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm"
+            [placeholder]="subRedditName$ | async"
+            (keydown)="preventSpace($event)"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+          />
+          @if (searchForm.get('term')?.value) {
+            <button
+              type="button"
+              aria-label="Clear search"
+              class="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-500 transition-colors hover:text-slate-300"
+              (click)="clearSearch()"
+            >
+              <span class="text-lg sm:text-xl">✕</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <button data-testid="search-button" class="button sr-only" type="submit">
+    Search
+  </button>
+</form>

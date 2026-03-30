@@ -1,0 +1,90 @@
+import {ChangeDetectionStrategy, Component, inject} from '@angular/core'
+import {CommonModule} from '@angular/common'
+import {SafeMode} from 'src/app/models/reddit.model'
+import {Observable} from 'rxjs'
+import {RedditService} from 'src/services/reddit/reddit.service'
+
+/**
+ * Toggles safe mode on/off. With safe mode disabled any content
+ * marked as 18+ will no longer be filtered from the {@see RedditService}
+ * query$ data stream.
+ */
+@Component({
+  selector: 'app-safe-mode',
+  imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './safe-mode.component.html'
+})
+export class SafeModeComponent {
+  /**
+   * Injected Reddit service for managing safe mode state.
+   */
+  private readonly redditService = inject(RedditService)
+
+  /**
+   * @inheritdoc
+   */
+  protected readonly safeModeSetting = SafeMode
+
+  /**
+   * Observable that emits if safe mode is enabled/disabled.
+   */
+  protected readonly safeMode$: Observable<SafeMode>
+
+  /**
+   * Observable for items per row
+   */
+  public readonly itemsPerRow$: Observable<number>
+
+  public minItemsPerRow = 1
+  public maxItemsPerRow = 6
+
+  /**
+   * Defines if the safe mode alert dialog should be shown or not.
+   */
+  public showAlert = false
+
+  /**
+   * @inheritdoc
+   */
+  public constructor() {
+    this.safeMode$ = this.redditService.getSafeMode()
+    this.itemsPerRow$ = this.redditService.getItemsPerRow()
+  }
+
+  /**
+   * Enables and disables the safe mode option.
+   * @param enabled The safe mode option to toggle to.
+   */
+  public toggleSafeMode(enabled: SafeMode): void {
+    this.redditService.setSafeMode(enabled)
+
+    if (enabled === this.safeModeSetting.DISABLED) {
+      this.toggleAlert()
+    }
+  }
+
+  /**
+   * Toggles the safe mode alert on|off.
+   */
+  public toggleAlert() {
+    this.showAlert = !this.showAlert
+  }
+
+  /**
+   * Updates the number of posts shown per row and recomputes the grid layout.
+   */
+  public updateItemsPerRow(value: string): void {
+    const parsedValue = Number(value)
+
+    if (Number.isNaN(parsedValue)) {
+      return
+    }
+
+    const clamped = Math.max(
+      this.minItemsPerRow,
+      Math.min(this.maxItemsPerRow, Math.floor(parsedValue))
+    )
+    this.redditService.setItemsPerRow(clamped)
+  }
+}

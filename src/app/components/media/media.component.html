@@ -1,0 +1,66 @@
+@if (content) {
+<div class="pb-3 block">
+  <div class="w-full rounded-lg bg-slate-800 border border-slate-700/50 p-1.5 pb-1.5 sm:p-2 sm:pb-2">
+    <!-- Image content -->
+    @if (
+    content.preview &&
+    content.preview.images.length &&
+    content.post_hint === redditPostHint.IMAGE
+    ) {
+    <img class="max-h-96 w-full rounded-lg object-contain" data-testid="media-image" [alt]="content.title"
+      [src]="imageSrc" (error)="onImageError()" />
+    }
+    <!-- Reddit video content -->
+    @if (
+    content.preview &&
+    content.preview.reddit_video_preview &&
+    content.post_hint === redditPostHint.LINK
+    ) {
+    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950">
+      <video data-testid="media-video" class="h-full w-full rounded-lg object-contain" autoplay loop muted playsinline>
+        <source [src]="content.preview.reddit_video_preview.fallback_url" />
+      </video>
+    </div>
+    }
+    <!-- YouTube/Twitch responsive embed container -->
+    @if (
+    (content.post_hint === redditPostHint.RICH_VIDEO ||
+    content.post_hint === redditPostHint.LINK) &&
+    content.secure_media_embed &&
+    computedVideoPlatform !== videoPlatform.OTHER
+    ) {
+    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950" data-testid="video-embed-container">
+      <iframe class="h-full w-full rounded-lg border-0" data-testid="video-iframe"
+        [src]="computedVideoEmbedUrl ?? '' | trustResource" title="{{ content.title }}" allow="
+              accelerometer;
+              autoplay;
+              clipboard-write;
+              encrypted-media;
+              gyroscope;
+              picture-in-picture;
+              web-share;
+            " allowfullscreen></iframe>
+    </div>
+    }
+    <!-- Standard iframe for other embed types -->
+    @if (
+    (content.post_hint === redditPostHint.RICH_VIDEO ||
+    content.post_hint === redditPostHint.LINK) &&
+    content.secure_media_embed &&
+    computedVideoPlatform === videoPlatform.OTHER
+    ) {
+    <div class="aspect-video w-full overflow-hidden rounded-lg bg-slate-950">
+      <iframe class="h-full w-full rounded-lg border-0" data-testid="media-iframe"
+        [src]="content.secure_media_embed.media_domain_url | trustResource"></iframe>
+    </div>
+    }
+    <!-- Gallery -->
+    @if (
+    content.is_gallery && content.gallery_data && content.gallery_data.items
+    ) {
+    <app-gallery [metaData]="content.media_metadata || {}" [galleryData]="content.gallery_data || {}"></app-gallery>
+    }
+
+  </div>
+</div>
+}
