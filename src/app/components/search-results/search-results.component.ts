@@ -8,7 +8,6 @@ import {
   OnDestroy,
   OnInit,
   QueryList,
-  ViewChild,
   ViewChildren,
   inject
 } from '@angular/core'
@@ -30,18 +29,6 @@ import { SubFilterComponent } from '../sub-filter/sub-filter.component'
 })
 export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy {
   /**
-   * Prefetch distance below the viewport to trigger loading before users
-   * hit the visual end of the current content.
-   */
-  private static readonly PREFETCH_ROOT_MARGIN_PX = 2200
-
-  /**
-   * Multiplier for viewport-based prefetching so long cards still trigger
-   * next-page loading far in advance.
-   */
-  private static readonly PREFETCH_VIEWPORT_MULTIPLIER = 2
-
-  /**
    * Injected Reddit service for managing page types and subreddit names.
    */
   private readonly redditService = inject(RedditService)
@@ -57,16 +44,17 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private readonly cdr = inject(ChangeDetectorRef)
 
   /**
-   * Sentinel element at the bottom of the list; observed to trigger next-page loading.
-   */
-  @ViewChild('scrollSentinel')
-  private scrollSentinel?: ElementRef<HTMLDivElement>
-
-  /**
    * Rendered masonry columns used to read current rendered heights.
    */
   @ViewChildren('masonryColumn')
   private masonryColumns?: QueryList<ElementRef<HTMLDivElement>>
+
+  /**
+   * Sentinel elements at the bottom of each column. When any sentinel enters
+   * the viewport, the next page is requested.
+   */
+  @ViewChildren('columnSentinel')
+  private columnSentinels?: QueryList<ElementRef<HTMLDivElement>>
 
   /**
    * Observable used to inform loading state (still async-piped in template).
@@ -77,6 +65,7 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
   private pageTypeSubscription?: Subscription
   private itemsPerRowSubscription?: Subscription
   private loadingSubscription?: Subscription
+  private sentinelListSubscription?: Subscription
   private sentinelObserver?: IntersectionObserver
 
   /**
@@ -205,6 +194,10 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
    */
   public ngAfterViewInit(): void {
     this.attachSentinelObserver()
+
+    this.sentinelListSubscription = this.columnSentinels?.changes.subscribe(() => {
+      this.observeColumnSentinels()
+    })
   }
 
   /**
@@ -216,6 +209,7 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
     this.pageTypeSubscription?.unsubscribe()
     this.itemsPerRowSubscription?.unsubscribe()
     this.loadingSubscription?.unsubscribe()
+    this.sentinelListSubscription?.unsubscribe()
   }
 
   /**
@@ -223,29 +217,37 @@ export class SearchResultsComponent implements OnInit, AfterViewInit, OnDestroy 
    * enters the viewport, loading the next page of results.
    */
   private attachSentinelObserver(): void {
-    if (!this.scrollSentinel) return
-
-    const viewportHeight = globalThis.window?.innerHeight ?? 0
-    const prefetchMargin = Math.max(
-      SearchResultsComponent.PREFETCH_ROOT_MARGIN_PX,
-      viewportHeight * SearchResultsComponent.PREFETCH_VIEWPORT_MULTIPLIER
-    )
+    if (!this.columnSentinels) return
 
     this.sentinelObserver = new IntersectionObserver(
       entries => {
-        const entry = entries[0]
-        if (entry.isIntersecting && this.nextPage && !this.isRequestingNextPage) {
+        const hasVisibleSentinel = entries.some(entry => entry.isIntersecting)
+
+        if (hasVisibleSentinel && this.nextPage && !this.isRequestingNextPage) {
           this.isRequestingNextPage = true
           this.redditService.setSubRedditPage(this.nextPage)
         }
       },
       {
         threshold: 0,
-        rootMargin: `0px 0px ${prefetchMargin}px 0px`
+        rootMargin: '0px'
       }
     )
 
-    this.sentinelObserver.observe(this.scrollSentinel.nativeElement)
+    this.observeColumnSentinels()
+  }
+
+  /**
+   * Rebinds observation to the current column sentinel set.
+   */
+  private observeColumnSentinels(): void {
+    if (!this.sentinelObserver || !this.columnSentinels) return
+
+    this.sentinelObserver.disconnect()
+
+    for (const sentinel of this.columnSentinels.toArray()) {
+      this.sentinelObserver.observe(sentinel.nativeElement)
+    }
   }
 
   /**

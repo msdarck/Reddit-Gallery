@@ -10,11 +10,12 @@
         @for (result of column; track result.id) {
           <app-media [content]="result" [activePageType]="activePageType"></app-media>
         }
+        @if (column.length) {
+          <div #columnSentinel class="h-px w-full"></div>
+        }
       </div>
       }
     </div>
-    <!-- Sentinel element observed to trigger next-page loading -->
-    <div #scrollSentinel class="h-1"></div>
     @if (!hasResults && !(loading$ | async)) {
     <div data-testid="search-results-empty" class="mx-auto max-w-2xl text-center">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="mx-auto h-12 w-12 fill-slate-600"

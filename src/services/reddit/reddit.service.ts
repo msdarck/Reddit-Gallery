@@ -26,7 +26,7 @@ export class RedditService {
   private readonly http = inject(HttpClient)
 
   private static readonly API_BASE = environment.redditApiBase
-  private static readonly MAX_CONTENT_FETCH = 24
+  private static readonly CONTENT_FETCH = 12
   private static readonly DEFAULT_SUBREDDIT = 'cats'
   private static readonly DEFAULT_PAGE = 't3_'
 
@@ -307,7 +307,7 @@ export class RedditService {
 
     params.append(
       RedditRequestParameters.LIMIT,
-      RedditService.MAX_CONTENT_FETCH.toString()
+      RedditService.CONTENT_FETCH.toString()
     )
 
     // If page is provided it gets appended to the query to ensure we're not re-fetching the same content.
