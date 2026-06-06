@@ -91,7 +91,7 @@ export class MediaComponent {
   /**
    * CSS aspect-ratio value used by the image container to reduce CLS.
    */
-  public imageAspectRatio = '1 / 1'
+  public imageAspectRatio = 'auto'
 
   /**
    * CSS aspect-ratio for video containers, computed from media metadata.
@@ -130,7 +130,7 @@ export class MediaComponent {
 
     this.imageWidth = undefined
     this.imageHeight = undefined
-    this.imageAspectRatio = '1 / 1'
+    this.imageAspectRatio = 'auto'
     this.videoAspectRatio = '16 / 9'
     this.computedVideoPlatform = undefined
     this.computedVideoEmbedUrl = undefined
@@ -152,7 +152,7 @@ export class MediaComponent {
 
     this.imageWidth = undefined
     this.imageHeight = undefined
-    this.imageAspectRatio = '1 / 1'
+    this.imageAspectRatio = 'auto'
   }
 
   /**
@@ -209,6 +209,22 @@ export class MediaComponent {
     if (this.content?.thumbnail) {
       this.imageSrc = this.content.thumbnail
     }
+  }
+
+  /**
+   * Updates image dimensions from the actual loaded asset so the card can
+   * follow the image's real aspect ratio instead of staying square.
+   */
+  public onImageLoad(event: Event): void {
+    const image = event.target as HTMLImageElement | null
+
+    if (!image?.naturalWidth || !image?.naturalHeight) {
+      return
+    }
+
+    this.imageWidth = image.naturalWidth
+    this.imageHeight = image.naturalHeight
+    this.imageAspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`
   }
 
   /**

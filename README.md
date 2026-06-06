@@ -21,5 +21,5 @@ npm start
 Then open your browser and go to: http://localhost:4200
 
 ## 🛠️ Notes
-- The Reddit API does not require client credentials (at the time of writing), so no additional setup is needed.
+- The app now reads Reddit's public RSS feeds instead of the deprecated unauthenticated JSON endpoints, so no additional setup is needed.
 - Make sure you have Node.js and npm installed before running the project.

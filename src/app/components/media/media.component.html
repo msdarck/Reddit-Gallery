@@ -9,11 +9,13 @@
     ) {
     <div
       class="w-full overflow-hidden rounded-lg bg-slate-950"
-      [style.aspect-ratio]="imageAspectRatio"
+      [style.aspect-ratio]="imageAspectRatio === 'auto' ? null : imageAspectRatio"
       data-testid="media-image-container"
     >
       <img
-        class="h-full w-full rounded-lg object-contain"
+        class="w-full rounded-lg object-contain"
+        [class.h-full]="imageAspectRatio !== 'auto'"
+        [class.h-auto]="imageAspectRatio === 'auto'"
         data-testid="media-image"
         [alt]="content.title"
         [src]="imageSrc"
@@ -21,6 +23,7 @@
         [attr.height]="imageHeight"
         loading="lazy"
         decoding="async"
+        (load)="onImageLoad($event)"
         (error)="onImageError()"
       />
     </div>

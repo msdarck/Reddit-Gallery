@@ -9,7 +9,6 @@ import {
   IRedditResult,
   RedditSubFilter,
   SafeMode,
-  IRedditResultNatural,
   RedditRequestParameters,
   RedditPostHint,
   RedditPageType
@@ -183,6 +182,11 @@ export class RedditService {
    * @param page The name of the page to fetch content after.
    */
   public setSubRedditPage(page: string): void {
+    if (page.startsWith(RedditService.DEFAULT_PAGE)) {
+      this._subRedditPage$.next(page)
+      return
+    }
+
     this._subRedditPage$.next(`${RedditService.DEFAULT_PAGE}${page}`)
   }
 
@@ -299,11 +303,11 @@ export class RedditService {
     safeMode
   }: IRedditRequestOptions): Observable<IRedditResult[]> {
     const pageType = this._redditPageType$.getValue()
-    const endpointPath = `/${pageType}/${name}${filter !== RedditFilter.ALL ? `/${filter}` : ''}.json`
+    const endpointPath = `/${pageType}/${name}${filter !== RedditFilter.ALL ? `/${filter}` : ''}.rss`
     const normalizedBase = RedditService.API_BASE.endsWith('/')
       ? RedditService.API_BASE.slice(0, -1)
       : RedditService.API_BASE
-    const params = new URLSearchParams({raw_json: '1'})
+    const params = new URLSearchParams()
 
     params.append(
       RedditRequestParameters.LIMIT,
@@ -311,7 +315,7 @@ export class RedditService {
     )
 
     // If page is provided it gets appended to the query to ensure we're not re-fetching the same content.
-    if (page) {
+    if (page && page !== RedditService.DEFAULT_PAGE) {
       params.append(RedditRequestParameters.AFTER, page)
     }
 
@@ -327,10 +331,10 @@ export class RedditService {
 
     console.info('✅ Making request to:', requestUrl)
 
-    return this.http.get<IRedditResultNatural>(requestUrl).pipe(
-      map(result =>
-        result.data.children
-          .map(item => item.data)
+    return this.http.get(requestUrl, {responseType: 'text'}).pipe(
+      map(feed => this.parseRssFeed(feed, name, pageType)),
+      map(results =>
+        results
           .filter((item: IRedditResult) => {
             /**
              * Ensure the content is safe for viewing based on the current safe mode settings.
@@ -363,5 +367,222 @@ export class RedditService {
           })
       )
     )
+  }
+
+  /**
+   * Parses Reddit RSS/Atom output into the shape the UI expects.
+   */
+  private parseRssFeed(
+    feed: string,
+    name: string,
+    pageType: RedditPageType
+  ): IRedditResult[] {
+    const document = new DOMParser().parseFromString(feed, 'application/xml')
+
+    if (document.querySelector('parsererror')) {
+      return []
+    }
+
+    return Array.from(document.getElementsByTagName('entry'))
+      .map(entry => this.parseRssEntry(entry, name, pageType))
+      .filter((item): item is IRedditResult => Boolean(item))
+  }
+
+  /**
+   * Parses a single RSS entry into the app's result model.
+   */
+  private parseRssEntry(
+    entry: Element,
+    name: string,
+    pageType: RedditPageType
+  ): IRedditResult | undefined {
+    const id = this.getEntryText(entry, 'id').replace(/^t3_/, '')
+    const title = this.getEntryText(entry, 'title')
+    const author = this.getEntryAuthor(entry)
+    const permalink = this.getEntryLink(entry)
+    const category = this.getEntryCategory(entry)
+    const contentHtml = this.getEntryText(entry, 'content')
+    const thumbnailUrl = this.getEntryThumbnail(entry)
+    const parsedContent = this.parseEntryContent(contentHtml, permalink)
+    const externalUrl = parsedContent.externalUrl
+    const imageUrl = parsedContent.imageUrl
+    const isGalleryPage = Boolean(externalUrl && /\/gallery\//i.test(externalUrl))
+    const mediaUrl = isGalleryPage
+      ? imageUrl || thumbnailUrl || permalink
+      : externalUrl || imageUrl || thumbnailUrl || permalink
+
+    if (!id || !title || !author || !mediaUrl) {
+      return undefined
+    }
+
+    const isYoutube = this.isVideoHost(mediaUrl, ['youtube.com', 'youtu.be'])
+    const isTwitch = this.isVideoHost(mediaUrl, ['twitch.tv'])
+    const isImage = this.isImageUrl(mediaUrl)
+    const isNsfw = /\bnsfw\b/i.test(title) || /\[nsfw\]/i.test(contentHtml)
+
+    const previewImage = imageUrl || thumbnailUrl || (isImage ? mediaUrl : '')
+    const canRender = isYoutube || isTwitch || Boolean(previewImage)
+
+    if (!canRender) {
+      return undefined
+    }
+
+    return {
+      author,
+      domain: this.getHostname(mediaUrl),
+      gallery_data: undefined,
+      id,
+      is_gallery: false,
+      is_video: isYoutube || isTwitch,
+      media_metadata: undefined,
+      media: undefined,
+      media_embed: undefined,
+      num_comments: 0,
+      over_18: isNsfw,
+      permalink,
+      post_hint: isYoutube || isTwitch ? RedditPostHint.LINK : RedditPostHint.IMAGE,
+      preview: previewImage
+        ? {
+            enabled: true,
+            images: [
+              {
+                id,
+                source: {
+                  url: previewImage,
+                  width: 1,
+                  height: 1
+                },
+                resolutions: []
+              }
+            ]
+          }
+        : undefined,
+      secure_media: isYoutube || isTwitch
+        ? {
+            oembed: {
+              html: `<iframe src="${mediaUrl}"></iframe>`
+            },
+            type: this.getHostname(mediaUrl)
+          }
+        : undefined,
+      secure_media_embed: isYoutube || isTwitch
+        ? {
+            media_domain_url: mediaUrl,
+            content: `<iframe src="${mediaUrl}"></iframe>`
+          }
+        : undefined,
+      subreddit: category || name,
+      subreddit_type: pageType === RedditPageType.USER ? 'user' : 'public',
+      thumbnail: previewImage,
+      title,
+      url: mediaUrl
+    }
+  }
+
+  /**
+   * Extracts the first matching text node from the RSS entry.
+   */
+  private getEntryText(entry: Element, tagName: string): string {
+    return entry.getElementsByTagName(tagName)[0]?.textContent?.trim() ?? ''
+  }
+
+  /**
+   * Extracts the author username from the RSS entry.
+   */
+  private getEntryAuthor(entry: Element): string {
+    const authorName =
+      entry.getElementsByTagName('author')[0]?.getElementsByTagName('name')[0]?.textContent?.trim() ?? ''
+
+    return authorName.replace(/^\/u\//i, '').replace(/^\/user\//i, '')
+  }
+
+  /**
+   * Extracts the canonical permalink from the RSS entry.
+   */
+  private getEntryLink(entry: Element): string {
+    const linkElement = entry.getElementsByTagName('link')[0]
+
+    return linkElement?.getAttribute('href')?.trim() ?? linkElement?.textContent?.trim() ?? ''
+  }
+
+  /**
+   * Extracts the subreddit/category label from the RSS entry.
+   */
+  private getEntryCategory(entry: Element): string {
+    const category =
+      entry.getElementsByTagName('category')[0]?.getAttribute('label')?.trim() ?? ''
+
+    return category.replace(/^r\//i, '')
+  }
+
+  /**
+   * Extracts the media thumbnail from the RSS entry.
+   */
+  private getEntryThumbnail(entry: Element): string {
+    return entry.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url')?.trim() ?? ''
+  }
+
+  /**
+   * Parses the HTML payload inside the RSS entry and extracts media URLs.
+   */
+  private parseEntryContent(contentHtml: string, permalink: string): {
+    externalUrl?: string
+    imageUrl?: string
+  } {
+    if (!contentHtml) {
+      return {}
+    }
+
+    const document = new DOMParser().parseFromString(contentHtml, 'text/html')
+    const imageUrl = document.querySelector('img')?.getAttribute('src')?.trim()
+    const linkUrl = Array.from(document.querySelectorAll('a'))
+      .find(anchor => anchor.textContent?.trim() === '[link]')
+      ?.getAttribute('href')
+      ?.trim()
+
+    if (linkUrl && linkUrl !== permalink) {
+      return {
+        externalUrl: linkUrl,
+        imageUrl
+      }
+    }
+
+    return {
+      imageUrl
+    }
+  }
+
+  /**
+   * Checks whether the supplied URL belongs to one of the requested hosts.
+   */
+  private isVideoHost(url: string, hosts: string[]): boolean {
+    const hostname = this.getHostname(url)
+
+    return hosts.some(host => hostname.includes(host))
+  }
+
+  /**
+   * Checks whether the supplied URL looks like an image.
+   */
+  private isImageUrl(url: string): boolean {
+    const hostname = this.getHostname(url)
+
+    return (
+      hostname.includes('i.redd.it') ||
+      hostname.includes('preview.redd.it') ||
+      hostname.includes('external-preview.redd.it') ||
+      /\.(png|jpe?g|gif|webp)(?:$|[?#])/i.test(url)
+    )
+  }
+
+  /**
+   * Returns the hostname for a URL when available.
+   */
+  private getHostname(url: string): string {
+    try {
+      return new URL(url).hostname.toLowerCase()
+    } catch {
+      return ''
+    }
   }
 }
